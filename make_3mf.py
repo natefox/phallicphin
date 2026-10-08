@@ -23,7 +23,19 @@ obj_model = f'''<?xml version="1.0" encoding="UTF-8"?>
  <build/>
 </model>'''
 
-a = math.radians(0)
+def fit_angle(m, bed=250.0):
+    """0 if it fits the bed square as-is, else the in-plane rotation (deg) that minimizes the larger extent."""
+    xy = m.vertices[:, :2]
+    if (xy.max(0) - xy.min(0)).max() <= bed:
+        return 0.0
+    def span(d):
+        t = math.radians(d)
+        q = xy @ np.array([[math.cos(t), math.sin(t)], [-math.sin(t), math.cos(t)]])
+        return (q.max(0) - q.min(0)).max()
+    return min(np.arange(0, 180, 0.5), key=span)
+
+
+a = math.radians(fit_angle(m))
 c, s = math.cos(a), math.sin(a)
 rot = f"{c:.6f} {s:.6f} 0 {-s:.6f} {c:.6f} 0 0 0 1"
 main_model = f'''<?xml version="1.0" encoding="UTF-8"?>

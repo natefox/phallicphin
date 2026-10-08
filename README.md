@@ -59,6 +59,23 @@ lying flat), and `fin.py` reproduces them:
 - **Print:** the flat back goes down, with no supports. Layers run the length of the fin, so the root
   is solid plateau the full tab thickness (strong where it matters).
 
+## Longboard
+
+A re-imagined 9" longboard single fin on a **US box** base (`boxbase.py`: 149.6 x 24.5 x 8.63 mm tab,
+3/16" pin hole, set-screw plate slot, measured from a stock longboard fin). Same character (balls with
+the gap notch at the root, swept shaft, head with corona rim and dome at the tip), proportioned to fill
+the P2S bed. `make_3mf.py` rotates parts that don't fit the 250 mm square straight.
+
+![longboard](preview_longboard.png)
+
+| file | what |
+|---|---|
+| `phallicphin_longboard.stl` | flat-backed, 262 x 236 x 8.6 mm; prints flat, rotated 4 deg (~4h30m, ~117 g) |
+| `phallicphin_longboard_upright.stl` | double-sided foil centered on the tab (`--sym`), stands on the tab; same outline, relief split across both faces |
+| `phallicphin_longboard_upright_P2S_PETG.3mf` | upright print: 12 mm brim, tree supports (`print_fin_upright.json`), 45 deg on the plate (~6h55m, ~158 g) |
+
+![longboard upright](preview_longboard_upright.png)
+
 ## Rebuild
 
     python3 -m venv .venv
@@ -71,3 +88,8 @@ lying flat), and `fin.py` reproduces them:
     .venv/bin/python make_3mf.py phallicphin_upright.stl template_P2S_PETG.3mf phallicphin_upright_P2S_PETG.3mf print_fin.json
     .venv/bin/python render_variants.py preview_variants.png phallicphin.stl phallicphin_upright.stl
     .venv/bin/python render_preview.py phallicphin.stl ref/photo.png preview.png ref/photo_installed.png preview_installed.png
+
+    .venv/bin/python longboard.py phallicphin_longboard.stl
+    .venv/bin/python make_3mf.py phallicphin_longboard.stl template_P2S_PETG.3mf phallicphin_longboard_P2S_PETG.3mf print_fin.json
+    .venv/bin/python longboard.py phallicphin_longboard_upright.stl --sym
+    .venv/bin/python make_3mf.py phallicphin_longboard_upright.stl template_P2S_PETG.3mf phallicphin_longboard_upright_P2S_PETG.3mf print_fin_upright.json
