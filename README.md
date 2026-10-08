@@ -76,6 +76,13 @@ the P2S bed. `make_3mf.py` rotates parts that don't fit the 250 mm square straig
 
 ![longboard upright](preview_longboard_upright.png)
 
+## boobphin
+
+`breast.py`: a breast-in-profile fin on the same Futures tab, nipple and puffy areola at the tip,
+flat-backed (`boobphin.stl`, `boobphin_P2S_PETG.3mf`: ~2h17m, ~63 g, no supports).
+
+![boobphin](preview_boobphin.png)
+
 ## Rebuild
 
     python3 -m venv .venv
@@ -93,3 +100,5 @@ the P2S bed. `make_3mf.py` rotates parts that don't fit the 250 mm square straig
     .venv/bin/python make_3mf.py phallicphin_longboard.stl template_P2S_PETG.3mf phallicphin_longboard_P2S_PETG.3mf print_fin.json
     .venv/bin/python longboard.py phallicphin_longboard_upright.stl --sym
     .venv/bin/python make_3mf.py phallicphin_longboard_upright.stl template_P2S_PETG.3mf phallicphin_longboard_upright_P2S_PETG.3mf print_fin_upright.json
+    .venv/bin/python breast.py boobphin.stl
+    .venv/bin/python make_3mf.py boobphin.stl template_P2S_PETG.3mf boobphin_P2S_PETG.3mf print_fin.json
