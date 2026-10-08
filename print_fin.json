@@ -1,0 +1,11 @@
+{
+  "layer_height": "0.16",
+  "wall_loops": "5",
+  "top_shell_layers": "6",
+  "bottom_shell_layers": "5",
+  "sparse_infill_density": "40%",
+  "sparse_infill_pattern": "gyroid",
+  "wall_generator": "arachne",
+  "brim_type": "no_brim",
+  "seam_position": "back"
+}
