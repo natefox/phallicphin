@@ -1,16 +1,16 @@
 """boobphin: novelty Futures-base surf fin shaped like a breast in profile, nipple at the tip.
 
 usage: breast.py [out.stl] [plan.png]
-The leading edge is the upper slope, the full rounded trailing edge is the lower curve tucking into a
-crease (inframammary fold) at the rear of the tab, and the nipple sticks out at the top-right tip where
-phallicphin has its head, ringed by a slightly puffy areola.
+The outline comes from a hand-drawn sketch (SKETCH): the chest lies along the Futures root, a long gentle
+slope rises from the front of the tab to the peak, and a full round curve drops to the rear of the tab.
+STRETCH exaggerates the height. A small nipple sits at the peak, pointing up, ringed by a slightly puffy
+areola. The face is one smooth hill (no dips) that rounds off toward the edges.
 Coords: X along the tab (0 = front V-notch end), Y up from the tab top, Z = thickness.
 Flat-backed (Z=0 face flat, all relief on +Z): prints lying down, no supports.
 """
 import sys
 import numpy as np
 from manifold3d import CrossSection, Manifold, Mesh
-from scipy.interpolate import splev, splprep
 from scipy.ndimage import distance_transform_edt, gaussian_filter
 from shapely.geometry import Point, Polygon, box
 from skimage.measure import marching_cubes
@@ -26,18 +26,50 @@ TAB_W = 7.2
 TAB_EDGE_R = 0.6
 TAB_PROFILE = f"{HERE}/tab_profile_mm.csv"
 
-# --- outline: closed spline through these (mm), CCW from the front of the root ---
-BODY = [(4.0, -1.0), (60.0, -1.0), (106.0, -1.0),            # root (1 mm into the tab)
-        (110.0, 2.5), (114.0, 5.0), (121.0, 6.0),              # crease: tucks in at the rear of the tab
-        (134.0, 9.5), (147.0, 17.5), (158.0, 29.0), (166.0, 44.0), (170.5, 60.0),   # lower curve, full
-        (171.0, 76.0), (168.0, 92.0), (162.5, 105.0), (156.0, 114.5),
-        (147.0, 122.0),                                         # nipple sits on this corner
-        (135.0, 120.5), (118.0, 114.5), (100.0, 104.5), (82.0, 91.0), (64.0, 75.0),   # upper slope = LE
-        (45.0, 55.0), (29.0, 34.0), (15.0, 14.0)]
-NIP_BASE = (152.5, 119.5)    # nipple: base center on the outline...
-NIP_DIR = 40.0               # ...pointing this way (deg), roughly normal to the outline there
-NIP_L, NIP_R = 6.5, 5.6      # sticks out this far, radius (capsule)
+# --- outline: from a dotted-line sketch (px, chest along the bottom, nipple at the top), rear end first ---
+SKETCH = [(929, 466), (935, 454), (942, 436), (945, 414), (944, 389), (940, 367), (933, 350), (925, 337),
+          (915, 325), (904, 313), (892, 302), (879, 292), (863, 283), (848, 275), (836, 269), (822, 264),
+          (809, 258), (796, 253), (783, 247), (769, 241), (755, 237), (741, 233), (728, 230), (714, 230),
+          (700, 234), (687, 241), (675, 248), (662, 256), (650, 264), (638, 273), (628, 281), (616, 290),
+          (601, 301), (586, 312), (575, 320), (566, 327), (559, 333), (552, 338), (545, 342), (538, 347),
+          (531, 352), (521, 359), (509, 368), (495, 377), (482, 385), (469, 393), (457, 400), (440, 412),
+          (410, 430), (380, 447), (355, 459), (340, 466)]
+SK_BASE_Y = 466.0            # the sketch's chest line...
+SK_X = (340.0, 935.0)        # ...whose span lands on the root
+ROOT_X = (3.0, 108.0)        # (tab is 0..113)
+STRETCH = 1.6                # height exaggeration over the sketch (1 = as drawn: only ~45 mm tall)
+NIP_X = 714.0                # nipple: at the sketch's peak (px x)
+NIP_L, NIP_R = -0.35, 3.2    # nipple: capsule end this far out from the outline, radius (sticks up NIP_L + NIP_R)
+NIP_DIR = 88.0               # ...pointing this way (deg from +X): nearly straight up
 R_FILLET = 2.5               # fillet where the nipple meets the curve
+R_FOLD = 4.0                 # crease radius where the rear curve tucks into the root
+
+
+def sk_to_mm(p):
+    p = np.asarray(p, float)
+    k = (ROOT_X[1] - ROOT_X[0]) / (SK_X[1] - SK_X[0])
+    return np.column_stack([ROOT_X[0] + (p[:, 0] - SK_X[0]) * k, (SK_BASE_Y - p[:, 1]) * k * STRETCH])
+
+
+def body_points():
+    pts = sk_to_mm(SKETCH)[::-1]                  # root front -> peak -> rear
+    pts[:, 1] = np.maximum(pts[:, 1], 0.0)
+    return np.vstack([pts, [(pts[-1, 0], -1.0), (ROOT_X[0], -1.0)]])
+
+
+def nipple_base():
+    """(point, outward direction) of the outline's peak near NIP_X."""
+    p = sk_to_mm(SKETCH)
+    i = int(np.argmin(np.abs(np.array(SKETCH)[:, 0] - NIP_X) + 1e3 * (np.array(SKETCH)[:, 1] > 300)))
+    return p[i], np.array([np.cos(np.radians(NIP_DIR)), np.sin(np.radians(NIP_DIR))])
+
+
+def lobe():
+    """Center and radius of a disc in the full rear lobe (the thickest part)."""
+    p = sk_to_mm(SKETCH)
+    top = p[:, 1].max()
+    return np.array([(nipple_base()[0][0] + p[:, 0].max()) / 2, 0.45 * top]), 0.28 * top
+
 
 # --- thickness (flat back) ---
 T_MAX = TAB_W                # mound / root thickness
@@ -46,17 +78,18 @@ LE_K = 2.6
 R_TE = 34.0                  # the lower curve: a soft, full roll-off this wide (rounded breast)
 TE_K = 1.9
 H_MIN = 0.9                  # edge thickness
-TAPER = ((12.0, T_MAX), (40.0, 6.0))   # crest: full thickness at the root, easing to T_FLAT...
-MOUND_C, MOUND_R = (124.0, 62.0), 66.0  # ...under a round mound, T_MAX at its center, falling as r^2
-MOUND_EDGE = 5.0                        # ...to this at MOUND_R
-AREOLA_C = (150.0, 116.5)    # areola center, just inside the nipple base
-AREOLA_R = 17.0
+# crest: T_MAX over a core (the convex hull of the root and a disc in the lower curve), easing down with
+# distance from it. A convex core gives one smooth hill with no saddle between the root and the breast.
+T_LOW = 4.6                  # crest thickness this far...
+D_FALL = 48.0                # ...from the core (smoothstep)
+AREOLA_IN = 3.0              # areola center: this far inside the nipple base
+AREOLA_R = 11.5
 AREOLA_H = 0.6               # rim step: raised this much, eased over...
 AREOLA_EASE = 1.2            # ...this width
 AREOLA_PUFF = 0.9            # ...then puffs up a further cone toward the nipple
 BUMPS = 7                    # little Montgomery bumps round the areola
 BUMP_R, BUMP_H = 1.3, 0.35
-NIP_T = 7.6                  # nipple dome peak (stands proud of the areola)
+NIP_T = 6.6                  # nipple dome peak (stands proud of the areola)
 NIP_WALL = 3.0               # nipple side wall height at its rim
 NIP_Q = 2.2                  # dome profile 1 - r^Q
 
@@ -80,12 +113,13 @@ def smin(a, b, k):
 
 
 def outline():
-    p = np.array(BODY + [BODY[0]])
-    tck, _ = splprep(p.T, s=0, per=1)
-    body = Polygon(np.column_stack(splev(np.linspace(0, 1, 1200), tck))).buffer(0)
-    a = np.radians(NIP_DIR)
-    d = np.array([np.cos(a), np.sin(a)])
-    b = np.array(NIP_BASE)
+    from scipy.interpolate import splev, splprep
+    p = body_points()
+    tck, _ = splprep(p[:-2].T, s=len(p) * 0.15)                          # smooth the hand-drawn line
+    curve = np.column_stack(splev(np.linspace(0, 1, 800), tck))
+    body = Polygon(np.vstack([curve, p[-2:]])).buffer(0)
+    body = body.buffer(R_FOLD, 64).buffer(-R_FOLD, 64)                # round the crease at the fold
+    b, d = nipple_base()
     nip = Point(*(b - 4 * d)).buffer(NIP_R, 64).union(Point(*(b + NIP_L * d)).buffer(NIP_R, 64)).convex_hull
     poly = body.union(nip)
     poly = poly.buffer(R_FILLET, 64).buffer(-R_FILLET, 64)         # fillet the nipple's root
@@ -109,7 +143,7 @@ def thickness_field(poly, nip, nip_c):
     fm = raster(poly)
     # distance to the leading edge vs the rest: split the boundary at the top of the curve and at the root
     ring = np.array(poly.exterior.segmentize(0.2).coords)[:-1]
-    le = (ring[:, 1] > 0.5) & (ring[:, 0] < 118) & (ring[:, 1] > ring[:, 0] * 0.6 - 30)   # upper slope
+    le = (ring[:, 1] > 0.5) & (ring[:, 0] < nipple_base()[0][0] - 6)   # the slope in front of the nipple
     from scipy.spatial import cKDTree
     pts = np.column_stack([X.ravel(), Y.ravel()])
     d_le = cKDTree(ring[le]).query(pts)[0].reshape(X.shape)
@@ -117,10 +151,12 @@ def thickness_field(poly, nip, nip_c):
     d_te = cKDTree(ring[te]).query(pts)[0].reshape(X.shape)
     # root needs no edge: the tab continues it
 
-    crest = np.interp(Y, [TAPER[0][0], TAPER[1][0]], [TAPER[0][1], TAPER[1][1]])
-    rm = np.hypot(X - MOUND_C[0], Y - MOUND_C[1]) / MOUND_R
-    mound = T_MAX - (T_MAX - MOUND_EDGE) * rm ** 2
-    crest = -smin(-crest, -mound, 1.0)        # smooth max
+    lc, lr = lobe()
+    core = Polygon([(ROOT_X[0], -1.0), (ROOT_X[1], -1.0), (ROOT_X[1], 0.0), (ROOT_X[0], 0.0)]).union(
+        Point(*lc).buffer(lr, 64)).convex_hull
+    cm = raster(core)
+    e = np.clip(distance_transform_edt(~cm) * RES / D_FALL, 0, 1)
+    crest = T_MAX - (T_MAX - T_LOW) * e * e * (3 - 2 * e)
     e = np.clip(d_le / R_LE, 0, 1)
     h_le = H_MIN + (crest - H_MIN) * (1 - (1 - e) ** LE_K)
     e = np.clip(d_te / R_TE, 0, 1)
@@ -128,12 +164,14 @@ def thickness_field(poly, nip, nip_c):
     h = smin(smin(h_le, h_te, 1.0), crest, 0.8)
 
     # areola: puffy disc (plateau raised, eased at its rim), with a ring of small bumps
-    r = np.hypot(X - AREOLA_C[0], Y - AREOLA_C[1])
+    nb, nd = nipple_base()
+    ac = nb - AREOLA_IN * nd
+    r = np.hypot(X - ac[0], Y - ac[1])
     rise = AREOLA_H * np.clip((AREOLA_R - r) / AREOLA_EASE, 0, 1) ** 1.5
     rise += AREOLA_PUFF * np.clip(1 - r / AREOLA_R, 0, 1) ** 1.3
     for k in range(BUMPS):
         a = np.radians(200 + k * 360 / BUMPS)
-        bx, by = AREOLA_C[0] + 0.78 * AREOLA_R * np.cos(a), AREOLA_C[1] + 0.78 * AREOLA_R * np.sin(a)
+        bx, by = ac[0] + 0.78 * AREOLA_R * np.cos(a), ac[1] + 0.78 * AREOLA_R * np.sin(a)
         rb = np.hypot(X - bx, Y - by)
         rise += BUMP_H * np.sqrt(np.clip(1 - (rb / BUMP_R) ** 2, 0, 1))
     h = h + rise * np.clip((h - H_MIN) / 1.5, 0, 1)
@@ -187,6 +225,6 @@ if __name__ == "__main__":
         fig, ax = plt.subplots(figsize=(10, 8))
         ax.plot(*np.array(poly.exterior.coords).T)
         ax.plot(*np.array(nip.exterior.coords).T, "--")
-        ax.add_patch(plt.Circle(AREOLA_C, AREOLA_R, fill=False, color="r"))
+        ax.add_patch(plt.Circle(nipple_base()[0], AREOLA_R, fill=False, color="r"))
         ax.plot(*np.loadtxt(TAB_PROFILE, delimiter=",").T, color="k")
         ax.set_aspect("equal"); ax.grid(); fig.savefig(PLAN, dpi=70)

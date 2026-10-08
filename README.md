@@ -78,8 +78,9 @@ the P2S bed. `make_3mf.py` rotates parts that don't fit the 250 mm square straig
 
 ## boobphin
 
-`breast.py`: a breast-in-profile fin on the same Futures tab, nipple and puffy areola at the tip,
-flat-backed (`boobphin.stl`, `boobphin_P2S_PETG.3mf`: ~2h17m, ~63 g, no supports).
+`breast.py`: a breast-in-profile fin on the same Futures tab, outline from a hand-drawn sketch (height
+stretched 1.6x), with a small nipple and puffy areola at the peak. Flat-backed, 113 x 83 x 7.2 mm
+(`boobphin.stl`, `boobphin_P2S_PETG.3mf`: ~1h01m, ~27 g, no supports).
 
 ![boobphin](preview_boobphin.png)
 
