@@ -1,32 +1,52 @@
 # phallicphin
 
-A novelty surf fin with a standard **Futures** base, traced from a photo of a printed original.
+A novelty surf fin with a standard **Futures** base, traced from photos of a printed original.
 Print-ready for a Bambu Lab P2S in PETG.
 
 ![preview](preview.png)
+![installed](preview_installed.png)
 
 | file | what |
-|---|---|
-| `phallicphin.stl` | the fin, 178 x 133 x 7.2 mm, watertight |
-| `phallicphin_P2S_PETG.3mf` | Bambu Studio project: P2S, PETG, 0.16 mm, 5 walls, 40% gyroid, no supports (~2h14m, ~59 g) |
+|--------------------------|-----------------------------------------------|
+| `phallicphin.stl` | the fin, 178 x 133 x 7.2 mm, watertight, single body |
+| `phallicphin_P2S_PETG.3mf` | Bambu Studio project: P2S, PETG, 0.16 mm, 5 walls, 40% gyroid, no supports (~1h56m, ~52 g) |
+| `preview.png` | photo / model at the photo's exact scale and position / model silhouette on the photo |
+| `preview_installed.png` | installed photo / model from a camera fitted to that photo / model silhouette on it |
 
 ## Design
 
-- **Base:** solid Futures tab, 113 x 13.2 x 7.2 mm, front V-notch and rear set-screw slot (`tab_profile_mm.csv`).
+The original is **flat on one side** with all of its relief on the other, and both photos
+show that shaped face. `ref/photo_installed.png` is the same face rotated ~90 degrees, with the root
+on the right and the lobe's hook notch at top right. It is not the back.
+The relief was read off the layer contours visible in `ref/photo.png` (the original was printed
+lying flat), and `fin.py` reproduces them:
+
+- **Base:** solid Futures tab, 113 x 13.2 x 7.2 mm, with a front V-notch and a rear set-screw slot (`tab_profile_mm.csv`).
   If it's tight in your box, set `TAB_W = 7.0` in `fin.py` and rebuild.
-- **Flat-backed:** the Z=0 face is flat and all the shaping is on top, so it prints lying down with no
-  supports and the layers run up the fin (strong at the root).
-- **Shape:** 7.2 mm plateau with a 12 mm rounded edge band, shaft tapering to 5 mm, a domed 7.2 mm head
-  with a rim, 0.8 mm minimum edge thickness.
+- **Outline:** traced from the photo at a fixed threshold, with a lower threshold around the head
+  so the shaded corona face and the underside of the glans are included. The corners where the shaft meets the flares are filleted (r 1.5 mm), and the flare tips are rounded (r 2 mm).
+- **Plateau:** a full-thickness (7.2 mm) area traced from the photo's first layer contour. It is the
+  blade triangle with a sharp apex, plus the U-shaped tongue that runs into the lobe. Away from it the
+  surface eases off gently over about 9 mm and then falls at a steady slope, so rings nest round the tongue as in the
+  photo. Near trailing edges everything is capped by a steeper copy of the edge taper, so edges stay thin; the cap and the fall-off are joined with a smooth min/max (no seams).
+- **Leading edge:** a steep 9.4 mm nose up to one layer below the plateau, then a flat terrace, then a
+  single 0.2 mm step up onto the triangle.
+- **Trailing edges** (shaft-to-lobe gap, lobe, hook): long, nearly straight tapers (34 mm wide at the blade,
+  24 mm at the lobe) down to 0.8 mm.
+- **Hook tooth** by the rear tab end: at least 2.2 mm thick, for strength.
+- **Shaft:** the crest tapers from 7.2 to 5.5 mm between 55 and 95 mm up.
+- **Head:** a conical dome (7.2 mm peak) whose rim is 5.6 mm high at the corona and fades to 2.8 mm round the glans.
+  It has a 2 mm rounded edge band ending on a 2.4 mm side wall (a solid cap), and only ever falls toward the outline. The corona is a sloped face
+  (spread over 1.7 mm) up from the shaft, not a step.
+- **Print:** the flat back goes down, with no supports. Layers run the length of the fin, so the root
+  is solid plateau the full tab thickness (strong where it matters).
 
 ## Rebuild
 
-```sh
-python3 -m venv .venv
-.venv/bin/pip install trimesh manifold3d numpy scipy shapely scikit-image opencv-python-headless networkx matplotlib
+    python3 -m venv .venv
+    .venv/bin/pip install trimesh manifold3d numpy scipy shapely scikit-image opencv-python-headless networkx matplotlib
 
-.venv/bin/python trace_outline.py ref/photo.png outline_mm.csv      # photo -> outline (scale: tab = 113 mm)
-.venv/bin/python fin.py phallicphin.stl                              # params at the top of fin.py
-.venv/bin/python make_3mf.py phallicphin.stl template_P2S_PETG.3mf phallicphin_P2S_PETG.3mf print_fin.json
-.venv/bin/python render_preview.py phallicphin.stl ref/photo.png preview.png
-```
+    .venv/bin/python trace_outline.py ref/photo.png outline_mm.csv      # photo -> outline (scale: tab = 113 mm)
+    .venv/bin/python fin.py phallicphin.stl                              # params at the top of fin.py
+    .venv/bin/python make_3mf.py phallicphin.stl template_P2S_PETG.3mf phallicphin_P2S_PETG.3mf print_fin.json
+    .venv/bin/python render_preview.py phallicphin.stl ref/photo.png preview.png ref/photo_installed.png preview_installed.png
