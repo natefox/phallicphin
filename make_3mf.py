@@ -5,6 +5,7 @@ import numpy as np
 import trimesh
 
 stl, tpl, out = sys.argv[1:4]
+name = stl.rsplit("/", 1)[-1].rsplit(".", 1)[0]
 m = trimesh.load(stl)
 m.apply_translation(-m.bounding_box.centroid)  # object-local coords centered, like Bambu does
 half_z = m.extents[2] / 2
@@ -29,7 +30,7 @@ main_model = f'''<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p">
  <metadata name="Application">BambuStudio-02.08.02.61</metadata>
  <metadata name="BambuStudio:3mfVersion">1</metadata>
- <metadata name="Title">phallicphin</metadata>
+ <metadata name="Title">{name}</metadata>
  <resources>
   <object id="2" p:UUID="{uuid.uuid4()}" type="model">
    <components>
@@ -45,11 +46,11 @@ main_model = f'''<?xml version="1.0" encoding="UTF-8"?>
 model_settings = f'''<?xml version="1.0" encoding="UTF-8"?>
 <config>
   <object id="2">
-    <metadata key="name" value="phallicphin"/>
+    <metadata key="name" value="{name}"/>
     <metadata key="extruder" value="1"/>
     <metadata face_count="{len(m.faces)}"/>
     <part id="1" subtype="normal_part">
-      <metadata key="name" value="phallicphin"/>
+      <metadata key="name" value="{name}"/>
       <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
       <mesh_stat face_count="{len(m.faces)}" edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
     </part>

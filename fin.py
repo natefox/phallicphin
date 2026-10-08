@@ -1,6 +1,7 @@
 """phallicphin: novelty Futures-base surf fin, shape traced from ref/photo.png.
 
-usage: fin.py [out.stl]
+usage: fin.py [out.stl] [rake|upright]
+  rake (default): as photographed, shaft + head sweep back. upright: shaft + head re-bent to arc upward.
 Coords: X along the tab (0 = front V-notch end), Y up from the tab top, Z = thickness.
 Built flat-backed (Z=0 face flat, all shaping on +Z) so it prints lying down with no
 supports and layers running the length of the fin (strong at the root).
@@ -16,6 +17,7 @@ from skimage.measure import marching_cubes
 import cv2
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "phallicphin.stl"
+VARIANT = sys.argv[2] if len(sys.argv) > 2 else "rake"
 HERE = __file__.rsplit("/", 1)[0] if "/" in __file__ else "."
 
 # --- tab (Futures box fit) ---
@@ -65,6 +67,27 @@ HEAD_PEAK = px(990, 325)
 
 RES = 0.2            # voxel size, mm
 
+# --- upright variant: leading edge straightened, shaft + head re-bent to arc upward ---
+# spine: the leading edge offset 12.5 mm inward (= shaft centerline up top), root to past the head tip (mm)
+SPINE = [(16.8, 4.3), (21.6, 13.1), (26.5, 21.8), (31.6, 30.4), (37.0, 38.8), (42.9, 46.9), (49.2, 54.7),
+         (55.8, 62.2), (62.8, 69.3), (70.3, 75.9), (78.3, 81.9), (86.7, 87.2), (95.7, 91.6), (105.1, 95.0),
+         (114.8, 97.6), (124.5, 99.8), (134.4, 101.2), (144.4, 101.0), (150, 101), (160, 100.6),
+         (175, 99.6), (200, 98)]
+# heading (deg) the spine is re-bent to, at these arclengths along it (linear between, held after the last);
+# before BEND_FROM the rake's own leading edge is kept, blending into the table over S_IN
+BEND_S = [120]
+BEND_DEG = [32.0]   # hold the leading edge's heading where it reaches ~(75, 95) instead of drooping
+BEND_FROM, S_IN = 105.0, 20.0
+W_IN, W_OUT = 20.0, 33.0   # carried fully within W_IN of the spine on the blade/lobe side, fading to 0 by W_OUT
+# optional fuller back for a steeply bent shaft (BACK_FILL): back edge in RAKE mm (so it rides with the bend), from the
+# gap tip across the gap to under the corona; the strip between it and the shaft is added to the outline (usual relief)
+BACK_FILL = False
+BACK_RAKE = [(88.2, 49.7), (88.6, 51.9), (89.4, 53.9), (90.7, 55.9), (92.4, 57.9), (94.4, 60.0), (96.7, 62.0),
+             (99.3, 63.9), (102.0, 65.8), (104.7, 67.4), (107.4, 69.0), (109.9, 70.4), (112.3, 71.6), (114.4, 72.7),
+             (116.5, 73.8), (118.5, 74.8), (120.5, 75.8), (122.6, 76.8), (124.8, 77.8), (127.2, 79.0), (130.5, 81.1),
+             (134.4, 83.4), (138.3, 85.6), (142.5, 87.6)]
+BACK_FILLET = 3.0    # round the joins where the new back edge meets the gap tip and the shaft
+
 
 def tab():
     """Solid Futures tab: 113 x 13.2 side profile (V-notch front, set-screw slot rear),
@@ -88,9 +111,9 @@ def smin(a, b, k):
     return np.minimum(a, b) - w * w * k / 4
 
 
-def thickness_field():
-    outline = np.loadtxt(f"{HERE}/outline_mm.csv", delimiter=",")
-    poly = Polygon(outline).buffer(0)
+def thickness_field(poly=None):
+    if poly is None:
+        poly = Polygon(np.loadtxt(f"{HERE}/outline_mm.csv", delimiter=",")).buffer(0)
     # head only: fillet the concave corners and round the flare tips (closing, then opening)
     zone = box(CORONA[0][0] - 8, 60, 300, 300)
     fix = poly.buffer(R_FILLET, 64).buffer(-R_FILLET, 64).buffer(-R_TIP, 64).buffer(R_TIP, 64)
@@ -204,8 +227,64 @@ def thickness_field():
     return h, sdf2, (x0, y0)
 
 
-def fin_body():
-    h, sdf2, (x0, y0) = thickness_field()
+def bend(xy):
+    """Upright variant: forward-warp fin points (N x 2). Everything near the spine (leading edge, shaft,
+    head) follows the spine re-bent to the BEND_S/BEND_DEG headings; the blade and lobe fade back to
+    unmoved between W_IN and W_OUT. Applied to the fine marching-cubes mesh in XY only, so the relief
+    rides along and the back stays flat."""
+    from scipy.interpolate import splev, splprep
+    from scipy.spatial import cKDTree
+    tck, _ = splprep(np.array(SPINE, float).T, s=2.0)
+    p = np.array(splev(np.linspace(0, 1, 4000), tck)).T
+    seg = np.r_[0, np.cumsum(np.hypot(*np.diff(p, axis=0).T))]
+    s = np.arange(0, seg[-1], 0.1)
+    c0 = np.column_stack([np.interp(s, seg, p[:, 0]), np.interp(s, seg, p[:, 1])])
+    phi0 = np.unwrap(np.arctan2(*np.gradient(c0, axis=0)[:, ::-1].T))
+    ss = lambda u: (lambda u: u * u * (3 - 2 * u))(np.clip(u, 0, 1))
+    target = np.radians(gaussian_filter1d(np.interp(s, BEND_S, BEND_DEG), 50, mode="nearest"))  # 5 mm smoothing
+    phi1 = phi0 + (target - phi0) * ss((s - BEND_FROM) / S_IN)
+    c1 = c0[0] + np.r_[[[0, 0]], np.cumsum(0.1 * np.column_stack([np.cos(phi1), np.sin(phi1)])[:-1], 0)]
+
+    i = cKDTree(c0).query(xy)[1]
+    d = xy - c0[i]
+    t = d[:, 0] * np.cos(phi0[i]) + d[:, 1] * np.sin(phi0[i])
+    n = -d[:, 0] * np.sin(phi0[i]) + d[:, 1] * np.cos(phi0[i])      # + toward the leading edge
+    t = np.where(i == len(c0) - 1, np.maximum(t, 0), t)            # sub-sample offset; extrapolate past the tip
+    moved = c1[i] + t[:, None] * np.column_stack([np.cos(phi1[i]), np.sin(phi1[i])]) + \
+        n[:, None] * np.column_stack([-np.sin(phi1[i]), np.cos(phi1[i])])
+    w = np.where(i > 0, 1 - ss((-n - W_IN) / (W_OUT - W_IN)), 0.0)
+    return xy + w[:, None] * (moved - xy)
+
+
+def unbend(q, iters=30):
+    """Inverse of bend() for points q (N x 2): grid lookup, then Newton (finite-difference Jacobian)."""
+    from scipy.spatial import cKDTree
+    g = np.mgrid[-10:220:0.5, -5:160:0.5].reshape(2, -1).T          # seed: nearest forward-mapped grid point
+    p, e = g[cKDTree(bend(g)).query(q)[1]].astype(float), 0.05
+    for _ in range(iters):
+        r = q - bend(p)
+        jx = (bend(p + [e, 0]) - bend(p - [e, 0])) / (2 * e)
+        jy = (bend(p + [0, e]) - bend(p - [0, e])) / (2 * e)
+        det = jx[:, 0] * jy[:, 1] - jx[:, 1] * jy[:, 0]
+        p += np.column_stack([jy[:, 1] * r[:, 0] - jy[:, 0] * r[:, 1], -jx[:, 1] * r[:, 0] + jx[:, 0] * r[:, 1]]) / det[:, None]
+    return p, np.abs(q - bend(p)).max()
+
+
+def upright_outline():
+    """Rake outline plus the strip between the shaft and the BACK_RAKE curve (filleted joins)."""
+    poly = Polygon(np.loadtxt(f"{HERE}/outline_mm.csv", delimiter=",")).buffer(0)
+    if not BACK_FILL:
+        return poly
+    back = LineString(BACK_RAKE)
+    strip = max((back.buffer(d, single_sided=True) for d in (18.0, -18.0)),   # the side that overlaps the shaft
+                key=lambda g: g.intersection(poly).area)
+    grown = poly.union(strip.intersection(poly.buffer(18.0)))
+    # fillet the new concave joins only (closing), so the rest of the outline is untouched
+    return grown.buffer(BACK_FILLET, 64).buffer(-BACK_FILLET, 64).intersection(poly.buffer(30)).union(grown)
+
+
+def fin_body(variant="rake"):
+    h, sdf2, (x0, y0) = thickness_field(upright_outline() if variant == "upright" else None)
     nz = int((h.max() + 2) / RES) + 1
     z = -1 + np.arange(nz) * RES
     # inside: within the outline, above the bed, below the surface
@@ -214,6 +293,8 @@ def fin_body():
     v, f, _, _ = marching_cubes(vol, 0.0, spacing=(RES, RES, RES))
     v = v - RES
     v = np.column_stack([x0 + v[:, 1], y0 + v[:, 0], -1 + v[:, 2]])
+    if variant == "upright":
+        v[:, :2] = bend(v[:, :2])
     f = f[:, ::-1]
     m = trimesh.Trimesh(v, f, process=True)
     if m.volume < 0:
@@ -223,11 +304,14 @@ def fin_body():
 
 
 if __name__ == "__main__":
-    body = fin_body()
+    body = fin_body(VARIANT)
     print("fin status", body.status(), "vol", round(body.volume()))
     part = (body + tab()).simplify(0.01)
     mm = part.to_mesh()
     out = trimesh.Trimesh(mm.vert_properties[:, :3], mm.tri_verts)
+    if out.body_count > 1:   # drop zero-volume slivers the union can leave on the root line
+        with np.errstate(invalid="ignore"):
+            out = trimesh.util.concatenate([b for b in out.split(only_watertight=False) if abs(b.volume) > 1.0])
     print("watertight", out.is_watertight, "faces", len(out.faces), "bounds", out.bounds.round(2).tolist(),
           "vol cm3", round(out.volume / 1000, 1))
     out.export(OUT)

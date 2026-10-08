@@ -1,7 +1,12 @@
 # phallicphin
 
 A novelty surf fin with a standard **Futures** base, traced from photos of a printed original.
-Print-ready for a Bambu Lab P2S in PETG.
+Print-ready for a Bambu Lab P2S in PETG. Two templates:
+
+- **rake** (`phallicphin`): as photographed, the shaft and head sweep back.
+- **upright** (`phallicphin_upright`): the same fin, but the shaft and head carry on up at the leading edge's angle instead of drooping back.
+
+![variants](preview_variants.png)
 
 ![preview](preview.png)
 ![installed](preview_installed.png)
@@ -9,7 +14,9 @@ Print-ready for a Bambu Lab P2S in PETG.
 | file | what |
 |--------------------------|-----------------------------------------------|
 | `phallicphin.stl` | the fin, 178 x 133 x 7.2 mm, watertight, single body |
-| `phallicphin_P2S_PETG.3mf` | Bambu Studio project: P2S, PETG, 0.16 mm, 5 walls, 40% gyroid, no supports (~1h56m, ~52 g) |
+| `phallicphin_P2S_PETG.3mf` | Bambu Studio project: P2S, PETG, 0.16 mm, 5 walls, 40% gyroid, no supports (~2h01m, ~53 g) |
+| `phallicphin_upright.stl` | upright template, 169 x 154 x 7.2 mm, watertight, single body |
+| `phallicphin_upright_P2S_PETG.3mf` | same print settings (~2h01m, ~53 g) |
 | `preview.png` | photo / model at the photo's exact scale and position / model silhouette on the photo |
 | `preview_installed.png` | installed photo / model from a camera fitted to that photo / model silhouette on it |
 
@@ -38,6 +45,17 @@ lying flat), and `fin.py` reproduces them:
 - **Head:** a conical dome (7.2 mm peak) whose rim is 5.6 mm high at the corona and fades to 2.8 mm round the glans.
   It has a 2 mm rounded edge band ending on a 2.4 mm side wall (a solid cap), and only ever falls toward the outline. The corona is a sloped face
   (spread over 1.7 mm) up from the shaft, not a step.
+- **Upright template:** `fin.py out.stl upright` builds the rake fin and then warps its fine mesh in XY only.
+  - **Spine:** it runs 12.5 mm inside the leading edge, from the root up the shaft and through the head.
+  - **Bend:** the rake's leading edge is kept until it reaches about (75, 95), heading about 32 degrees. From there
+    the spine holds that heading (`BEND_S` / `BEND_DEG`) instead of drooping over. So the shaft and head carry on
+    up and back in a straight line, and the head ends higher and less raked.
+  - **What moves:** everything within 20 mm of the spine comes along with it, which is the leading edge, shaft and
+    head. The blade and lobe fade back to unmoved by 33 mm. The relief, corona and edges ride along, and the back
+    stays flat.
+  - **Steeper bends:** `BEND_S` / `BEND_DEG` is a heading table along the spine, so steeper or C-shaped bends are a
+    table change. For those, `BACK_FILL = True` adds a fuller, curved back to the shaft (`BACK_RAKE`) with the usual
+    trailing-edge taper.
 - **Print:** the flat back goes down, with no supports. Layers run the length of the fin, so the root
   is solid plateau the full tab thickness (strong where it matters).
 
@@ -49,4 +67,7 @@ lying flat), and `fin.py` reproduces them:
     .venv/bin/python trace_outline.py ref/photo.png outline_mm.csv      # photo -> outline (scale: tab = 113 mm)
     .venv/bin/python fin.py phallicphin.stl                              # params at the top of fin.py
     .venv/bin/python make_3mf.py phallicphin.stl template_P2S_PETG.3mf phallicphin_P2S_PETG.3mf print_fin.json
+    .venv/bin/python fin.py phallicphin_upright.stl upright
+    .venv/bin/python make_3mf.py phallicphin_upright.stl template_P2S_PETG.3mf phallicphin_upright_P2S_PETG.3mf print_fin.json
+    .venv/bin/python render_variants.py preview_variants.png phallicphin.stl phallicphin_upright.stl
     .venv/bin/python render_preview.py phallicphin.stl ref/photo.png preview.png ref/photo_installed.png preview_installed.png
